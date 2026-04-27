@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+    
+    function isValidUser() {
+      return request.resource.data.keys().hasAll(['displayName', 'email', 'createdAt']) &&
+             request.resource.data.displayName is string &&
+             request.resource.data.email is string &&
+             request.resource.data.createdAt is timestamp;
+    }
+    
+    function isValidClosetItem() {
+      return request.resource.data.keys().hasAll(['name', 'category', 'createdAt']) &&
+             request.resource.data.name is string &&
+             request.resource.data.category is string &&
+             request.resource.data.createdAt is timestamp;
+    }
+    
+    function isValidOutfit() {
+      return request.resource.data.keys().hasAll(['name', 'items', 'createdAt']) &&
+             request.resource.data.name is string &&
+             request.resource.data.items is list &&
+             request.resource.data.createdAt is timestamp;
+    }
+    
+    // Simplified rate limiting - we'll rely on Firebase Functions for proper rate limiting
+    // This is a basic check that can be enhanced with Cloud Functions
+    function notRateLimited() {
+      return true; // Temporarily disable rate limiting until we implement it with Cloud Functions
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser();
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isAdmin();
+      
+      // User's closet items
+      match /closetItems/{itemId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow create: if isSignedIn() && isOwner(userId) && isValidClosetItem();
+        allow update: if isSignedIn() && isOwner(userId);
+        allow delete: if isSignedIn() && isOwner(userId);
+      }
+      
+      // User's outfits
+      match /savedOutfits/{outfitId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow create: if isSignedIn() && isOwner(userId) && isValidOutfit();
+        allow update: if isSignedIn() && isOwner(userId);
+        allow delete: if isSignedIn() && isOwner(userId);
+      }
+      
+      // User's favorite outfits
+      match /favoriteOutfits/{favoriteId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow create: if isSignedIn() && isOwner(userId);
+        allow update: if isSignedIn() && isOwner(userId);
+        allow delete: if isSignedIn() && isOwner(userId);
+      }
+      
+      // User's virtual closet layouts
+      match /virtualClosetLayouts/{layoutId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow create: if isSignedIn() && isOwner(userId);
+        allow update: if isSignedIn() && isOwner(userId);
+        allow delete: if isSignedIn() && isOwner(userId);
+      }
+      
+      // User's outfit ratings
+      match /outfitRatings/{ratingId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow create: if isSignedIn() && isOwner(userId);
+        allow update: if isSignedIn() && isOwner(userId);
+        allow delete: if isSignedIn() && isOwner(userId);
+      }
+      
+      // Rate limiting collection - for future use with Cloud Functions
+      match /rateLimits/{limitType} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow write: if false; // Only written by server functions
+      }
+    }
+    
+    // Shared outfits (public)
+    match /sharedOutfits/{shareId} {
+      allow read: if true; // Public read access
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false; // Only created by server
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Error reports
+    match /errorReports/{reportId} {
+      allow create: if true; // Allow anonymous error reporting
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // Analytics (aggregated data)
+    match /analytics/{docId} {
+      allow read: if isAdmin();
+      allow write: if false; // Only written by server functions
+    }
+  }
+} 

@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+  processing-service:
+    build: .
+    container_name: closet-ai-processing-container
+    ports:
+      - "8000:8000"
+    environment:
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./models:/app/models
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s 
